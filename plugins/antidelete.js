@@ -1,88 +1,86 @@
-const axios = require('axios');
-const config = require('../config');
-const { cmd, commands } = require('../command');
+const { cmd } = require('../command');
 const { downloadMediaMessage } = require('../lib/msg');
 const fs = require("fs");
 
+// 🔹 Chargement du fichier JSON pour stocker l'état de l'anti-delete
+const settingsFile = "./DATABASE/antidelete.json";
+let antiDeleteSettings = fs.existsSync(settingsFile) ? JSON.parse(fs.readFileSync(settingsFile)) : { enabled: false };
+
 cmd({
   pattern: "antidelete",
-  desc: "Activate or deactivate anti-delete feature: Any deleted message in groups or DMs will be sent to your private chat (Owner only).",
+  desc: "Activate or deactivate anti-delete feature: Deleted messages will be sent to the owner's private chat.",
   category: "utility",
   filename: __filename,
-}, async (conn, mek, m, { isOwner, reply, quoted, args }) => {
+}, async (conn, mek, m, { isOwner, reply, args }) => {
   if (!isOwner) return reply("❌ You are not the owner!");
 
-  // Variable pour activer ou désactiver l'Anti-Delete
-  let antiDeleteEnabled = false;
-
-  // Activer ou désactiver l'Anti-Delete
+  // Activation ou désactivation de l'Anti-Delete
   if (args[0] === "on") {
-    antiDeleteEnabled = true;
-    return reply("✅ Anti-Delete activé ! Les messages supprimés seront envoyés en privé à l'Owner.");
+    antiDeleteSettings.enabled = true;
+    fs.writeFileSync(settingsFile, JSON.stringify(antiDeleteSettings));
+    return reply("✅ Anti-Delete activated! Deleted messages will be sent to the Owner's private chat.");
   }
+
   if (args[0] === "off") {
-    antiDeleteEnabled = false;
-    return reply("🚫 Anti-Delete désactivé ! Les messages supprimés ne seront plus interceptés.");
+    antiDeleteSettings.enabled = false;
+    fs.writeFileSync(settingsFile, JSON.stringify(antiDeleteSettings));
+    return reply("🚫 Anti-Delete deactivated! Deleted messages will no longer be intercepted.");
   }
 
-  // Si Anti-Delete est activé
-  if (antiDeleteEnabled) {
-    try {
-      // Surveille l'événement de suppression de message
-      conn.on('message-delete', async (deletedMessage) => {
-        const { key, message, from } = deletedMessage;
-        const deleterId = key.participant || key.remoteJid;  // Récupère l'ID de l'utilisateur qui a supprimé le message
+  reply(`ℹ️ *Anti-Delete Status:* ${antiDeleteSettings.enabled ? "✅ Enabled" : "❌ Disabled"}`);
+});
 
-        if (!message) return;  // Si le message supprimé n'existe pas, ignore
+// 🔹 Surveillance des suppressions de messages
+conn.on('message-delete', async (deletedMessage) => {
+  if (!antiDeleteSettings.enabled) return; // Ignore si désactivé
 
-        // Si le message supprimé est un message texte
-        let mime = message.mimetype || "";
-        let mediaType = "text";
-        let mediaBuffer;
+  try {
+    const { key, message } = deletedMessage;
+    if (!message) return; // Ignore si aucun message supprimé
 
-        if (mime.startsWith("image")) {
-          mediaType = "image";
-          mediaBuffer = await downloadMediaMessage(message);
-        } else if (mime.startsWith("video")) {
-          mediaType = "video";
-          mediaBuffer = await downloadMediaMessage(message);
-        } else if (mime.startsWith("audio")) {
-          mediaType = "audio";
-          mediaBuffer = await downloadMediaMessage(message);
-        }
+    const sender = key.participant || key.remoteJid;
+    const chatId = key.remoteJid;
+    const ownerJid = "owner@s.whatsapp.net"; // 🔹 Remplace par le JID réel de l'Owner
 
-        const deleterName = deleterId.split('@')[0]; // ID de l'utilisateur qui a supprimé
-        const now = new Date();
-        const time = now.toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const date = now.toLocaleDateString("fr-FR");
+    let mime = message.mimetype || "";
+    let mediaType = "text";
+    let mediaBuffer;
 
-        const infoMessage = `🛑 *Message supprimé détecté !*\n📩 *Expéditeur:* ${deleterName}\n🕒 *Heure de suppression:* ${time}, le ${date}\n📥 *Groupe ou DM:* ${from}`;
-
-        let messageOptions = {};
-
-        // Envoi de l'alerte au propriétaire
-        if (mediaType === "text") {
-          messageOptions = { text: `${infoMessage}\n\n💬 *Message supprimé:* ${message.text}` };
-        } else if (mediaBuffer) {
-          if (mediaType === "image") {
-            messageOptions = { image: mediaBuffer, caption: infoMessage };
-          } else if (mediaType === "video") {
-            messageOptions = { video: mediaBuffer, caption: infoMessage, mimetype: 'video/mp4' };
-          } else if (mediaType === "audio") {
-            messageOptions = { audio: mediaBuffer, caption: infoMessage, mimetype: 'audio/mpeg' };
-          }
-        }
-
-        // Vérifier si l'Owner est disponible
-        if (m.sender) {
-          await conn.sendMessage(m.sender, messageOptions); // Envoi au PM de l'Owner
-        } else {
-          reply("❌ Impossible d'envoyer au message privé de l'Owner.");
-        }
-      });
-    } catch (error) {
-      console.error("Erreur dans la commande antidelete :", error);
-      reply("❌ Une erreur est survenue lors du traitement de l'Anti-Delete.");
+    if (mime.startsWith("image")) {
+      mediaType = "image";
+      mediaBuffer = await downloadMediaMessage(message);
+    } else if (mime.startsWith("video")) {
+      mediaType = "video";
+      mediaBuffer = await downloadMediaMessage(message);
+    } else if (mime.startsWith("audio")) {
+      mediaType = "audio";
+      mediaBuffer = await downloadMediaMessage(message);
     }
+
+    const senderName = sender.split('@')[0];
+    const now = new Date();
+    const time = now.toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const date = now.toLocaleDateString("fr-FR");
+
+    const infoMessage = `🛑 *Deleted Message Detected!*\n📩 *Sender:* ${senderName}\n🕒 *Deleted at:* ${time}, ${date}\n📥 *Group/Chat:* ${chatId}`;
+
+    let messageOptions = {};
+    
+    if (mediaType === "text") {
+      messageOptions = { text: `${infoMessage}\n\n💬 *Deleted Message:* ${message.text}` };
+    } else if (mediaBuffer) {
+      if (mediaType === "image") {
+        messageOptions = { image: mediaBuffer, caption: infoMessage };
+      } else if (mediaType === "video") {
+        messageOptions = { video: mediaBuffer, caption: infoMessage, mimetype: 'video/mp4' };
+      } else if (mediaType === "audio") {
+        messageOptions = { audio: mediaBuffer, caption: infoMessage, mimetype: 'audio/mpeg' };
+      }
+    }
+
+    // 🔹 Envoi en privé à l'Owner
+    await conn.sendMessage(ownerJid, messageOptions);
+  } catch (error) {
+    console.error("Error in Anti-Delete command:", error);
   }
 });
