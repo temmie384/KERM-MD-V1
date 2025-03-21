@@ -1,3 +1,4 @@
+/*
 const { cmd } = require("../command");
 const { fetchEmix } = require("../lib/emix-utils");
 const { getBuffer } = require("../lib/functions");
@@ -46,3 +47,4 @@ cmd({
         reply(`❌ Could not generate emoji mix: ${e.message}`);
     }
 });
+*/
