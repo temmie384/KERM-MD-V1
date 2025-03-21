@@ -129,18 +129,17 @@ cmd({
 
 cmd({
   pattern: "save",
-  react: "🍆",
-  desc: "Save a status/photo/video and send it to your private chat.",
+  desc: "Save a status/photo/video and send it to your private chat (Owner only).",
   category: "utility",
   filename: __filename,
-}, async (conn, mek, m, { reply, quoted }) => {
+}, async (conn, mek, m, { isOwner, reply, quoted }) => {
+  if (!isOwner) return reply("❌ You are not the owner!");
+
   try {
-    // Vérifie que l'utilisateur a répondu à un message contenant un média
     if (!quoted) {
       return reply("❌ Please reply to a status, photo or video message to save it.");
     }
     
-    // Détermine le type de média à partir du mimetype
     let mime = (quoted.msg || quoted).mimetype || "";
     let mediaType = "";
     if (mime.startsWith("image")) {
@@ -153,11 +152,9 @@ cmd({
       return reply("❌ Unsupported media type. Please reply to a status, photo, or video message.");
     }
     
-    // Télécharge le média depuis le message cité
     const mediaBuffer = await quoted.download();
     if (!mediaBuffer) return reply("❌ Failed to download the media.");
-
-    // Prépare les options d'envoi selon le type de média
+    
     let messageOptions = {};
     if (mediaType === "image") {
       messageOptions = { image: mediaBuffer };
@@ -167,9 +164,8 @@ cmd({
       messageOptions = { audio: mediaBuffer, mimetype: 'audio/mpeg' };
     }
     
-    // Envoie le média dans le chat privé de l'utilisateur (m.sender)
-    await conn.sendMessage(m.sender, messageOptions, { quoted: m });
-    reply("✅ Media saved to your private chat!");
+    // Send the media directly to the owner's private chat (m.sender)
+    await conn.sendMessage(m.sender, messageOptions);
     
   } catch (error) {
     console.error("Error in save command:", error);
