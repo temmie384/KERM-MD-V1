@@ -4,18 +4,32 @@ const { cmd, commands } = require('../command');
 const { downloadMediaMessage } = require('../lib/msg');
 const fs = require("fs");
 
+// Variable pour activer ou désactiver l'Anti-Delete
+let antiDeleteEnabled = false;
+
 cmd({
   pattern: "antidelete",
-  desc: "Activate anti-delete feature: Any deleted message in groups or DMs will be sent to your private chat (Owner only).",
+  desc: "Activate or deactivate anti-delete feature: Any deleted message in groups or DMs will be sent to your private chat (Owner only).",
   category: "utility",
   filename: __filename,
-}, async (conn, mek, m, { isOwner, reply, isGroup, sender, from, quoted, participants }) => {
+}, async (conn, mek, m, { isOwner, reply, args, isGroup, sender, from, quoted, participants }) => {
   if (!isOwner) return reply("❌ You are not the owner!");
 
+  // Activation ou désactivation de l'Anti-Delete
+  if (args[0] === "on") {
+    antiDeleteEnabled = true;
+    return reply("✅ Anti-Delete activé ! Les messages supprimés seront envoyés en privé à l'Owner.");
+  }
+  if (args[0] === "off") {
+    antiDeleteEnabled = false;
+    return reply("🚫 Anti-Delete désactivé ! Les messages supprimés ne seront plus interceptés.");
+  }
+
+  // Vérification de l'état d'activation avant d'exécuter
+  if (!antiDeleteEnabled) return;
+
   try {
-    if (!quoted || !quoted.isDeleted) {
-      return reply("❌ This command works automatically when a message is deleted.");
-    }
+    if (!quoted || !quoted.isDeleted) return;
 
     // Obtenir les informations sur l'utilisateur qui a supprimé le message
     const deleter = participants.find(p => p.id === sender) || { id: sender, name: "Inconnu" };
@@ -41,8 +55,8 @@ cmd({
       mediaBuffer = await quoted.download();
     }
 
-    let messageOptions = {};
     const infoMessage = `🛑 *Message supprimé détecté !*\n📩 *Expéditeur:* ${deleterName}\n🕒 *Heure de suppression:* ${time}, le ${date}\n📥 *Groupe ou DM:* ${from}`;
+    let messageOptions = {};
 
     if (mediaType === "text") {
       messageOptions = { text: `${infoMessage}\n\n💬 *Message supprimé:* ${quoted.text}` };
@@ -60,7 +74,7 @@ cmd({
     await conn.sendMessage(m.sender, messageOptions);
 
   } catch (error) {
-    console.error("Error in antidelete command:", error);
-    reply("❌ An error occurred while processing the anti-delete feature.");
+    console.error("Erreur dans la commande antidelete :", error);
+    reply("❌ Une erreur est survenue lors du traitement de l'Anti-Delete.");
   }
 });
