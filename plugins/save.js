@@ -62,7 +62,7 @@ const config = require('../config');
 const { cmd, commands } = require('../command');
 const { downloadMediaMessage } = require('../lib/msg');
 const fs = require("fs");
-
+/*
 cmd({
     pattern: "save",
     desc: "Envoie le message multimédia sauvegardé dans le PM du bot.",
@@ -125,4 +125,54 @@ cmd({
         reply("❌ Une erreur est survenue lors de la sauvegarde du média.");
     }
 });
+*/
 
+cmd({
+  pattern: "save",
+  react: "🍆",
+  desc: "Save a status/photo/video and send it to your private chat.",
+  category: "utility",
+  filename: __filename,
+}, async (conn, mek, m, { reply, quoted }) => {
+  try {
+    // Vérifie que l'utilisateur a répondu à un message contenant un média
+    if (!quoted) {
+      return reply("❌ Please reply to a status, photo or video message to save it.");
+    }
+    
+    // Détermine le type de média à partir du mimetype
+    let mime = (quoted.msg || quoted).mimetype || "";
+    let mediaType = "";
+    if (mime.startsWith("image")) {
+      mediaType = "image";
+    } else if (mime.startsWith("video")) {
+      mediaType = "video";
+    } else if (mime.startsWith("audio")) {
+      mediaType = "audio";
+    } else {
+      return reply("❌ Unsupported media type. Please reply to a status, photo, or video message.");
+    }
+    
+    // Télécharge le média depuis le message cité
+    const mediaBuffer = await quoted.download();
+    if (!mediaBuffer) return reply("❌ Failed to download the media.");
+
+    // Prépare les options d'envoi selon le type de média
+    let messageOptions = {};
+    if (mediaType === "image") {
+      messageOptions = { image: mediaBuffer };
+    } else if (mediaType === "video") {
+      messageOptions = { video: mediaBuffer, mimetype: 'video/mp4' };
+    } else if (mediaType === "audio") {
+      messageOptions = { audio: mediaBuffer, mimetype: 'audio/mpeg' };
+    }
+    
+    // Envoie le média dans le chat privé de l'utilisateur (m.sender)
+    await conn.sendMessage(m.sender, messageOptions, { quoted: m });
+    reply("✅ Media saved to your private chat!");
+    
+  } catch (error) {
+    console.error("Error in save command:", error);
+    reply("❌ An error occurred while saving the media.");
+  }
+});
