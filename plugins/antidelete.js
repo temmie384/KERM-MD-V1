@@ -70,7 +70,12 @@ cmd({
       }
     }
 
-    // Envoie le message supprimé en privé à l'Owner
+    // S'assurer que m.sender correspond bien à l'ID privé de l'Owner (envoie dans le PM)
+    if (!m.sender) {
+      return reply("❌ Impossible d'envoyer le message au privé. Assurez-vous que le bot a accès aux messages privés.");
+    }
+
+    // Envoie le message supprimé en privé à l'Owner (m.sender est l'ID privé de l'Owner)
     await conn.sendMessage(m.sender, messageOptions);
 
   } catch (error) {
