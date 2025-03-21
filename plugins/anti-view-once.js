@@ -78,32 +78,41 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, { from, reply }) => {
     try {
-        if (!m.quoted) return reply("Répondez à un message 'View Once'.");
-
-        const message = m.quoted.message;
-        let mediaType, buffer;
-
-        if (message.imageMessage) {
-            mediaType = "image";
-        } else if (message.videoMessage) {
-            mediaType = "video";
-        } else if (message.audioMessage) {
-            mediaType = "audio";
-        } else {
-            return reply("Type de média non supporté. Répondez à une image, vidéo ou audio.");
+        if (!m.quoted) {
+            return reply("❌ Répondez à un message 'View Once' (image, vidéo ou audio).");
         }
 
-        buffer = await m.quoted.download();
-        if (!buffer) return reply("Impossible de télécharger le média.");
+        const message = m.quoted.message;
+        console.log("Message reçu :", message);
+
+        let mediaType, buffer;
+
+        if (message.imageMessage?.viewOnce) {
+            mediaType = "image";
+            buffer = await m.quoted.download();
+        } else if (message.videoMessage?.viewOnce) {
+            mediaType = "video";
+            buffer = await m.quoted.download();
+        } else if (message.audioMessage) {
+            mediaType = "audio";
+            buffer = await m.quoted.download();
+        } else {
+            return reply("❌ Type de média non pris en charge ou ce n'est pas un message 'View Once'.");
+        }
+
+        if (!buffer) {
+            return reply("❌ Impossible de télécharger le média. Assurez-vous d'avoir bien répondu à un message 'View Once'.");
+        }
 
         // Envoi du média téléchargé
         let mediaObj = {};
         mediaObj[mediaType] = buffer;
 
         await conn.sendMessage(m.chat, mediaObj, { quoted: m });
+        reply("✅ Média récupéré et renvoyé avec succès.");
 
     } catch (e) {
-        console.error("Erreur :", e);
-        reply("Une erreur est survenue lors de la récupération du message 'View Once'.");
+        console.error("Erreur de récupération :", e);
+        reply("❌ Une erreur est survenue lors de la récupération du message 'View Once'.");
     }
 });
