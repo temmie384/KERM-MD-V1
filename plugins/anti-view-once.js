@@ -63,11 +63,9 @@ cmd({
     }
 });*/
 
-const axios = require('axios');
-const config = require('../config');
-const { cmd, commands } = require('../command');
 const fs = require("fs");
 const path = require("path");
+const { cmd, commands } = require('../command');
 
 const mediaFolder = path.join(__dirname, "media_view_once");
 if (!fs.existsSync(mediaFolder)) {
@@ -78,7 +76,7 @@ cmd({
     pattern: "vv",
     react: "💾",
     alias: ["retrive", "viewonce"],
-    desc: "Stocke et renvoie un message 'View Once' (image/vidéo/audio).",
+    desc: "Stocke et renvoie un message 'View Once' (image/vidéo/audio) de façon permanente.",
     category: "misc",
     use: "<query>",
     filename: __filename
@@ -90,7 +88,6 @@ cmd({
 
         const message = m.quoted.message;
         const messageId = m.quoted.id;
-        console.log("Message reçu :", message);
 
         let mediaType, extension;
 
@@ -110,26 +107,28 @@ cmd({
         // Chemin de stockage du fichier
         const filePath = path.join(mediaFolder, `${messageId}.${extension}`);
 
-        // Si le fichier existe déjà, on le renvoie directement
+        // Vérifier si le média est déjà stocké
         if (fs.existsSync(filePath)) {
             const buffer = fs.readFileSync(filePath);
             await conn.sendMessage(m.chat, { [mediaType]: buffer }, { quoted: m });
             return reply("✅ Média déjà stocké. Affichage du fichier.");
         }
 
-        // Sinon, on télécharge et on stocke le média
+        // Téléchargement du média "View Once"
         const buffer = await m.quoted.download();
-        if (!buffer) return reply("❌ Impossible de télécharger le média.");
+        if (!buffer) {
+            return reply("❌ Impossible de télécharger le média. Assurez-vous d'avoir bien répondu à un message 'View Once'.");
+        }
 
-        // Sauvegarde sur le disque
+        // Stockage du média
         fs.writeFileSync(filePath, buffer);
-        reply("✅ Média téléchargé et stocké avec succès.");
 
         // Envoi du média
         await conn.sendMessage(m.chat, { [mediaType]: buffer }, { quoted: m });
+        reply("✅ Média téléchargé, stocké et affiché avec succès.");
 
     } catch (e) {
-        console.error("Erreur de récupération :", e);
-        reply("❌ Une erreur est survenue lors du traitement.");
+        console.error("Erreur de traitement :", e);
+        reply("❌ Une erreur est survenue lors du traitement du message 'View Once'.");
     }
 });
