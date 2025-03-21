@@ -29,55 +29,59 @@ cmd({
   if (!antiDeleteEnabled) return;
 
   try {
-    if (!quoted || !quoted.isDeleted) return;
+    // L'événement de suppression de message
+    conn.on('message-delete', async (deletedMessage) => {
+      // Vérifie si le message supprimé provient d'un groupe ou d'un DM
+      const { key, message, from } = deletedMessage;
+      const deleterId = key.participant || key.remoteJid;  // Récupère l'ID de l'utilisateur qui a supprimé le message
 
-    // Obtenir les informations sur l'utilisateur qui a supprimé le message
-    const deleter = participants.find(p => p.id === sender) || { id: sender, name: "Inconnu" };
-    const deleterName = deleter.name || deleter.id.split('@')[0];
+      if (!message) return;  // Si le message supprimé n'existe pas, ignore
 
-    // Obtenir l'heure de la suppression
-    const now = new Date();
-    const time = now.toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const date = now.toLocaleDateString("fr-FR");
+      // Si le message supprimé est un message texte
+      let mime = message.mimetype || "";
+      let mediaType = "text";
+      let mediaBuffer;
 
-    let mime = (quoted.msg || quoted).mimetype || "";
-    let mediaType = "text";
-    let mediaBuffer;
-
-    if (mime.startsWith("image")) {
-      mediaType = "image";
-      mediaBuffer = await quoted.download();
-    } else if (mime.startsWith("video")) {
-      mediaType = "video";
-      mediaBuffer = await quoted.download();
-    } else if (mime.startsWith("audio")) {
-      mediaType = "audio";
-      mediaBuffer = await quoted.download();
-    }
-
-    const infoMessage = `🛑 *Message supprimé détecté !*\n📩 *Expéditeur:* ${deleterName}\n🕒 *Heure de suppression:* ${time}, le ${date}\n📥 *Groupe ou DM:* ${from}`;
-    let messageOptions = {};
-
-    if (mediaType === "text") {
-      messageOptions = { text: `${infoMessage}\n\n💬 *Message supprimé:* ${quoted.text}` };
-    } else if (mediaBuffer) {
-      if (mediaType === "image") {
-        messageOptions = { image: mediaBuffer, caption: infoMessage };
-      } else if (mediaType === "video") {
-        messageOptions = { video: mediaBuffer, caption: infoMessage, mimetype: 'video/mp4' };
-      } else if (mediaType === "audio") {
-        messageOptions = { audio: mediaBuffer, caption: infoMessage, mimetype: 'audio/mpeg' };
+      if (mime.startsWith("image")) {
+        mediaType = "image";
+        mediaBuffer = await downloadMediaMessage(message);
+      } else if (mime.startsWith("video")) {
+        mediaType = "video";
+        mediaBuffer = await downloadMediaMessage(message);
+      } else if (mime.startsWith("audio")) {
+        mediaType = "audio";
+        mediaBuffer = await downloadMediaMessage(message);
       }
-    }
 
-    // S'assurer que m.sender correspond bien à l'ID privé de l'Owner (envoie dans le PM)
-    if (!m.sender) {
-      return reply("❌ Impossible d'envoyer le message au privé. Assurez-vous que le bot a accès aux messages privés.");
-    }
+      const deleterName = deleterId.split('@')[0]; // ID de l'utilisateur qui a supprimé
+      const now = new Date();
+      const time = now.toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const date = now.toLocaleDateString("fr-FR");
 
-    // Envoie le message supprimé en privé à l'Owner (m.sender est l'ID privé de l'Owner)
-    await conn.sendMessage(m.sender, messageOptions);
+      const infoMessage = `🛑 *Message supprimé détecté !*\n📩 *Expéditeur:* ${deleterName}\n🕒 *Heure de suppression:* ${time}, le ${date}\n📥 *Groupe ou DM:* ${from}`;
 
+      let messageOptions = {};
+
+      // Envoi de l'alerte au propriétaire
+      if (mediaType === "text") {
+        messageOptions = { text: `${infoMessage}\n\n💬 *Message supprimé:* ${message.text}` };
+      } else if (mediaBuffer) {
+        if (mediaType === "image") {
+          messageOptions = { image: mediaBuffer, caption: infoMessage };
+        } else if (mediaType === "video") {
+          messageOptions = { video: mediaBuffer, caption: infoMessage, mimetype: 'video/mp4' };
+        } else if (mediaType === "audio") {
+          messageOptions = { audio: mediaBuffer, caption: infoMessage, mimetype: 'audio/mpeg' };
+        }
+      }
+
+      // Vérifier si l'Owner est disponible
+      if (m.sender) {
+        await conn.sendMessage(m.sender, messageOptions); // Envoi au PM de l'Owner
+      } else {
+        reply("❌ Impossible d'envoyer au message privé de l'Owner.");
+      }
+    });
   } catch (error) {
     console.error("Erreur dans la commande antidelete :", error);
     reply("❌ Une erreur est survenue lors du traitement de l'Anti-Delete.");
