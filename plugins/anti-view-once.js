@@ -67,52 +67,69 @@ const axios = require('axios');
 const config = require('../config');
 const { cmd, commands } = require('../command');
 const fs = require("fs");
+const path = require("path");
+
+const mediaFolder = path.join(__dirname, "media_view_once");
+if (!fs.existsSync(mediaFolder)) {
+    fs.mkdirSync(mediaFolder);
+}
 
 cmd({
     pattern: "vv",
     react: "💾",
     alias: ["retrive", "viewonce"],
-    desc: "Fetch and resend a ViewOnce message content (image/video/voice).",
+    desc: "Stocke et renvoie un message 'View Once' (image/vidéo/audio).",
     category: "misc",
     use: "<query>",
     filename: __filename
 }, async (conn, mek, m, { from, reply }) => {
     try {
         if (!m.quoted) {
-            return reply("❌ Répondez à un message 'View Once' (image, vidéo ou audio).");
+            return reply("❌ Répondez à un message 'View Once' pour le stocker.");
         }
 
         const message = m.quoted.message;
+        const messageId = m.quoted.id;
         console.log("Message reçu :", message);
 
-        let mediaType, buffer;
+        let mediaType, extension;
 
         if (message.imageMessage?.viewOnce) {
             mediaType = "image";
-            buffer = await m.quoted.download();
+            extension = "jpg";
         } else if (message.videoMessage?.viewOnce) {
             mediaType = "video";
-            buffer = await m.quoted.download();
+            extension = "mp4";
         } else if (message.audioMessage) {
             mediaType = "audio";
-            buffer = await m.quoted.download();
+            extension = "mp3";
         } else {
             return reply("❌ Type de média non pris en charge ou ce n'est pas un message 'View Once'.");
         }
 
-        if (!buffer) {
-            return reply("❌ Impossible de télécharger le média. Assurez-vous d'avoir bien répondu à un message 'View Once'.");
+        // Chemin de stockage du fichier
+        const filePath = path.join(mediaFolder, `${messageId}.${extension}`);
+
+        // Si le fichier existe déjà, on le renvoie directement
+        if (fs.existsSync(filePath)) {
+            const buffer = fs.readFileSync(filePath);
+            await conn.sendMessage(m.chat, { [mediaType]: buffer }, { quoted: m });
+            return reply("✅ Média déjà stocké. Affichage du fichier.");
         }
 
-        // Envoi du média téléchargé
-        let mediaObj = {};
-        mediaObj[mediaType] = buffer;
+        // Sinon, on télécharge et on stocke le média
+        const buffer = await m.quoted.download();
+        if (!buffer) return reply("❌ Impossible de télécharger le média.");
 
-        await conn.sendMessage(m.chat, mediaObj, { quoted: m });
-        reply("✅ Média récupéré et renvoyé avec succès.");
+        // Sauvegarde sur le disque
+        fs.writeFileSync(filePath, buffer);
+        reply("✅ Média téléchargé et stocké avec succès.");
+
+        // Envoi du média
+        await conn.sendMessage(m.chat, { [mediaType]: buffer }, { quoted: m });
 
     } catch (e) {
         console.error("Erreur de récupération :", e);
-        reply("❌ Une erreur est survenue lors de la récupération du message 'View Once'.");
+        reply("❌ Une erreur est survenue lors du traitement.");
     }
 });
