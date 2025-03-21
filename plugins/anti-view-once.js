@@ -11,7 +11,7 @@ YT: KermHackTools
 Github: Kgtech-cmr
 */
 
-const axios = require('axios');
+/*const axios = require('axios');
 const config = require('../config');
 const { cmd, commands } = require('../command');
 
@@ -60,5 +60,50 @@ cmd({
     } catch (e) {
         console.log("Error:", e);
         reply("An error occurred while fetching the ViewOnce message.", e);
+    }
+});*/
+
+const axios = require('axios');
+const config = require('../config');
+const { cmd, commands } = require('../command');
+const fs = require("fs");
+
+cmd({
+    pattern: "vv",
+    react: "💾",
+    alias: ["retrive", "viewonce"],
+    desc: "Fetch and resend a ViewOnce message content (image/video/voice).",
+    category: "misc",
+    use: "<query>",
+    filename: __filename
+}, async (conn, mek, m, { from, reply }) => {
+    try {
+        if (!m.quoted) return reply("Répondez à un message 'View Once'.");
+
+        const message = m.quoted.message;
+        let mediaType, buffer;
+
+        if (message.imageMessage) {
+            mediaType = "image";
+        } else if (message.videoMessage) {
+            mediaType = "video";
+        } else if (message.audioMessage) {
+            mediaType = "audio";
+        } else {
+            return reply("Type de média non supporté. Répondez à une image, vidéo ou audio.");
+        }
+
+        buffer = await m.quoted.download();
+        if (!buffer) return reply("Impossible de télécharger le média.");
+
+        // Envoi du média téléchargé
+        let mediaObj = {};
+        mediaObj[mediaType] = buffer;
+
+        await conn.sendMessage(m.chat, mediaObj, { quoted: m });
+
+    } catch (e) {
+        console.error("Erreur :", e);
+        reply("Une erreur est survenue lors de la récupération du message 'View Once'.");
     }
 });
